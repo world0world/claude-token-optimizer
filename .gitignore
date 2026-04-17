@@ -1,0 +1,44 @@
+# Secrets — never commit
+.env
+.env.local
+*.pem
+*.key
+credentials.json
+.credentials/
+.codex/
+.gemini/
+auth.json
+
+# Claude Code state
+.claude/settings.local.json
+.claude/sessions/
+.claude/logs/
+
+# MemKraft working state
+.memkraft/
+memory/inbox/
+
+# RTK local state
+.rtk/tee/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Node
+node_modules/
+npm-debug.log
+pnpm-debug.log
+
+# Backups
+*.bak

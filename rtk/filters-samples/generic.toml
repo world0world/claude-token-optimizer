@@ -1,0 +1,20 @@
+# Generic project filters. Customize per project tool output.
+# Drop-in as .rtk/filters.toml in a project root.
+
+schema_version = 1
+
+# Example: compress a custom build script
+# [filters.my-build]
+# match_command = "^scripts/build\\.sh"
+# strip_ansi = true
+# strip_lines_matching = ["^\\s*$", "^Downloading", "^Fetching"]
+# max_lines = 40
+# on_empty = "build: ok"
+
+# Example: long-running research pipeline
+# [filters.research-run]
+# match_command = "^python .*research_pipeline"
+# strip_ansi = true
+# strip_lines_matching = ["^INFO:", "^DEBUG:", "^\\s*$"]
+# max_lines = 30
+# on_empty = "research: no output"

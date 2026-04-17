@@ -1,0 +1,41 @@
+{
+  "_comment": "Rename to settings.json and copy to ~/.claude/. Per-OS command adjustments applied by install scripts.",
+
+  "env": {
+    "PYTHONUTF8": "1",
+    "PYTHONIOENCODING": "utf-8"
+  },
+
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(rtk:*)",
+      "Bash(memkraft:*)",
+      "Bash(npm run *)",
+      "Bash(pnpm:*)",
+      "Bash(pytest:*)",
+      "Bash(cargo:*)"
+    ],
+    "deny": []
+  },
+
+  "mcpServers": {
+    "_comment": "These entries are PLACEHOLDERS. install.sh rewrites them with OS-specific command arrays. POSIX: command=npx, args=[-y, gemini-mcp-tool]. Windows native: command=cmd, args=[/c, npx, -y, gemini-mcp-tool].",
+    "gemini-cli": {
+      "command": "npx",
+      "args": ["-y", "gemini-mcp-tool"]
+    },
+    "codex": {
+      "command": "codex",
+      "args": ["mcp"]
+    }
+  },
+
+  "_effort_note": "effortLevel and alwaysThinkingEnabled are intentionally OMITTED here. Set them per-session or per-project via settings.local.json to avoid forcing high-cost thinking onto Sonnet/Haiku sessions."
+}

@@ -1,0 +1,21 @@
+# Global RTK config. Copy to ~/.config/rtk/config.toml (POSIX) or %APPDATA%\rtk\config.toml (Windows).
+
+[hooks]
+# Commands to never auto-wrap (if you run RTK's PreToolUse hook)
+exclude_commands = ["cd", "export", "source", "."]
+
+[tee]
+# Save raw output on failures so Claude can re-read without re-executing.
+# "failures" | "always" | "off"
+enabled = true
+mode = "failures"
+# keep last N failed runs
+retain = 20
+
+[output]
+# Default ultra-compact mode off; enable per-command with -u
+ultra_compact = false
+
+[discovery]
+# `rtk discover` scans sessions for missed wrapping opportunities.
+scan_days = 7

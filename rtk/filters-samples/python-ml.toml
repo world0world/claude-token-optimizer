@@ -1,0 +1,22 @@
+# Filters for Python ML / data pipelines. Drop in project root as .rtk/filters.toml.
+
+schema_version = 1
+
+[filters.pytest-quiet]
+match_command = "^pytest"
+strip_ansi = true
+strip_lines_matching = ["^collected", "^platform ", "^rootdir", "^plugins:", "^\\s*$"]
+max_lines = 50
+
+[filters.model-train]
+match_command = "^python .*(train|fit)\\.py"
+strip_ansi = true
+strip_lines_matching = ["^Epoch \\d+/\\d+", "^ +\\d+/\\d+", "^INFO:"]
+max_lines = 40
+on_empty = "training: completed"
+
+[filters.jupyter-run]
+match_command = "^jupyter nbconvert"
+strip_ansi = true
+strip_lines_matching = ["^\\[NbConvertApp\\]"]
+max_lines = 20
