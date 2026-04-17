@@ -35,7 +35,8 @@ dotclaude/
 ├── settings.example.json      # Sanitized global settings (MCP, env, permissions)
 ├── CLAUDE.md                  # Global rules: session architecture + RTK + search
 ├── commands/                  # Slash commands (copied to ~/.claude/commands/)
-│   └── tokenoptimizer.md      # /tokenoptimizer — per-project scaffold
+│   ├── tokenoptimizer.md      # /tokenoptimizer — per-project scaffold
+│   └── review.md              # /review — Haiku→Codex review from Sonnet session
 ├── refs/                      # Detailed references (copied to ~/.claude/refs/)
 │   ├── rtk-commands.md
 │   ├── superpowers.md
@@ -97,15 +98,33 @@ gemini                         # Google sign-in (or set GEMINI_API_KEY)
 codex                          # ChatGPT sign-in (or set OPENAI_API_KEY)
 ```
 
-## Three-session workflow
+## Two-window hybrid workflow (recommended)
 
-Open three Claude Code windows in the **same project folder**:
+Managing three windows manually is tedious. The refined pattern uses **two** persistent windows plus on-demand subagents:
 
-| Window | `/model` | effort | Caveman | Role |
-|--------|---------|--------|---------|------|
-| 1 | opus | high | full | Design, plan writing, review |
-| 2 | sonnet | medium | full | Implementation, parallel subagents |
-| 3 | haiku | low | ultra | Codex review, web search, orchestration |
+| Window | `/model` | effort | Role |
+|--------|---------|--------|------|
+| 1 | opus | high | Design, `plans/*.md`, architecture review |
+| 2 | sonnet | medium | Implementation. Calls `/review` to spawn a Haiku subagent that routes Codex MCP |
+
+From the Sonnet window:
+```
+/review              # review HEAD
+/review HEAD~3..HEAD # review range
+/review plans/foo.md # review impl vs plan
+```
+
+A Haiku subagent spawns, calls `mcp__codex__review`, writes `plans/review-*.md`, returns a 200-word summary. No third window, no manual dispatch.
+
+### Legacy three-window layout
+
+Still valid if you prefer isolated caches per role:
+
+| Window | `/model` | effort | Role |
+|--------|---------|--------|------|
+| 1 | opus | high | Design |
+| 2 | sonnet | medium | Implementation |
+| 3 | haiku | low | Codex review, web search orchestration |
 
 Windows share state via:
 - `plans/*.md` — design handoff
