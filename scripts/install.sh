@@ -43,33 +43,34 @@ mkdir -p "$CLAUDE_DIR"
 TMP_SETTINGS="$(mktemp)"
 cp "$REPO_DIR/dotclaude/settings.example.json" "$TMP_SETTINGS"
 
-# Patch MCP command arrays per OS
+# Strip internal comment fields and mcpServers (MCPs registered via `claude mcp add`, not settings.json)
 python - <<PY
-import json, os, sys
+import json, os
 p = os.environ["TMP_SETTINGS"]
 with open(p, encoding="utf-8") as f:
     s = json.load(f)
-os_name = "$OS"
-
-if os_name == "windows":
-    s["mcpServers"]["gemini-cli"] = {"command": "cmd", "args": ["/c", "npx", "-y", "gemini-mcp-tool"]}
-    s["mcpServers"]["codex"] = {"command": "cmd", "args": ["/c", "codex", "mcp-server"]}
-else:
-    s["mcpServers"]["gemini-cli"] = {"command": "npx", "args": ["-y", "gemini-mcp-tool"]}
-    s["mcpServers"]["codex"] = {"command": "codex", "args": ["mcp-server"]}
-
-# strip internal comment fields
+s.pop("mcpServers", None)
 for k in list(s.keys()):
     if k.startswith("_"):
         del s[k]
-for k in list(s["mcpServers"].keys()):
-    if k.startswith("_"):
-        del s["mcpServers"][k]
-
 with open(p, "w", encoding="utf-8") as f:
     json.dump(s, f, indent=2, ensure_ascii=False)
 PY
 export TMP_SETTINGS
+
+# Register MCPs via claude CLI (settings.json mcpServers is ignored at user scope)
+if command -v claude >/dev/null 2>&1; then
+  echo "==> registering MCP servers via claude mcp add"
+  if [ "$OS" = "windows" ]; then
+    MSYS_NO_PATHCONV=1 claude mcp add gemini-cli -s user -- cmd /c npx -y gemini-mcp-tool 2>/dev/null || echo "    gemini-cli already registered"
+    MSYS_NO_PATHCONV=1 claude mcp add codex -s user -- cmd /c codex mcp-server 2>/dev/null || echo "    codex already registered"
+  else
+    claude mcp add gemini-cli -s user -- npx -y gemini-mcp-tool 2>/dev/null || echo "    gemini-cli already registered"
+    claude mcp add codex -s user -- codex mcp-server 2>/dev/null || echo "    codex already registered"
+  fi
+else
+  echo "    claude CLI not found → register MCPs manually after install"
+fi
 
 # Merge with existing settings.json if present, else copy
 if [ -f "$CLAUDE_DIR/settings.json" ]; then
@@ -84,7 +85,6 @@ with open(os.environ["TMP_SETTINGS"], encoding="utf-8") as f:
     new = json.load(f)
 # shallow merge, new wins on conflicts for env/mcpServers, keep existing permissions additive
 existing.setdefault("env", {}).update(new.get("env", {}))
-existing.setdefault("mcpServers", {}).update(new.get("mcpServers", {}))
 if "permissions" in new:
     allow = set(existing.get("permissions", {}).get("allow", [])) | set(new["permissions"].get("allow", []))
     existing.setdefault("permissions", {})["allow"] = sorted(allow)

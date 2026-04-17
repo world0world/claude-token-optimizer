@@ -1,5 +1,5 @@
 {
-  "_comment": "Rename to settings.json and copy to ~/.claude/. Per-OS command adjustments applied by install scripts.",
+  "_comment": "Copy to ~/.claude/settings.json. MCPs registered via `claude mcp add` separately — user-scope settings.json does NOT load mcpServers.",
 
   "env": {
     "PYTHONUTF8": "1",
@@ -25,17 +25,7 @@
     "deny": []
   },
 
-  "mcpServers": {
-    "_comment": "These entries are PLACEHOLDERS. install.sh rewrites them with OS-specific command arrays. POSIX: command=npx, args=[-y, gemini-mcp-tool]. Windows native: command=cmd, args=[/c, npx, -y, gemini-mcp-tool].",
-    "gemini-cli": {
-      "command": "npx",
-      "args": ["-y", "gemini-mcp-tool"]
-    },
-    "codex": {
-      "command": "codex",
-      "args": ["mcp-server"]
-    }
-  },
+  "_mcp_register": "POSIX: claude mcp add gemini-cli -s user -- npx -y gemini-mcp-tool && claude mcp add codex -s user -- codex mcp-server | Windows (git-bash): MSYS_NO_PATHCONV=1 claude mcp add gemini-cli -s user -- cmd /c npx -y gemini-mcp-tool && MSYS_NO_PATHCONV=1 claude mcp add codex -s user -- cmd /c codex mcp-server",
 
-  "_effort_note": "effortLevel and alwaysThinkingEnabled are intentionally OMITTED here. Set them per-session or per-project via settings.local.json to avoid forcing high-cost thinking onto Sonnet/Haiku sessions."
+  "_effort_note": "effortLevel/alwaysThinkingEnabled OMITTED. Set per-session via settings.local.json."
 }

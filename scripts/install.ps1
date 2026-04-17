@@ -33,22 +33,27 @@ New-Item -ItemType Directory -Force -Path $ClaudeDir | Out-Null
 $TmpSettings = [System.IO.Path]::GetTempFileName()
 Copy-Item "$RepoDir\dotclaude\settings.example.json" $TmpSettings -Force
 
-# Patch MCP for Windows
+# Strip mcpServers + comments (MCPs registered via `claude mcp add`)
 $env:TMP_SETTINGS = $TmpSettings
 python - <<'PY'
 import json, os
 p = os.environ["TMP_SETTINGS"]
 with open(p, encoding="utf-8") as f:
     s = json.load(f)
-s["mcpServers"]["gemini-cli"] = {"command": "cmd", "args": ["/c", "npx", "-y", "gemini-mcp-tool"]}
-s["mcpServers"]["codex"] = {"command": "cmd", "args": ["/c", "codex", "mcp-server"]}
+s.pop("mcpServers", None)
 for k in list(s.keys()):
     if k.startswith("_"): del s[k]
-for k in list(s["mcpServers"].keys()):
-    if k.startswith("_"): del s["mcpServers"][k]
 with open(p, "w", encoding="utf-8") as f:
     json.dump(s, f, indent=2, ensure_ascii=False)
 PY
+
+if (Get-Command claude -ErrorAction SilentlyContinue) {
+    Write-Host "==> registering MCP servers via claude mcp add"
+    & claude mcp add gemini-cli -s user -- cmd /c npx -y gemini-mcp-tool 2>$null
+    & claude mcp add codex -s user -- cmd /c codex mcp-server 2>$null
+} else {
+    Write-Host "    claude CLI not found"
+}
 
 $SettingsTarget = Join-Path $ClaudeDir "settings.json"
 if (Test-Path $SettingsTarget) {
@@ -60,7 +65,6 @@ import json, os
 with open(os.environ["EXISTING"], encoding="utf-8") as f: existing = json.load(f)
 with open(os.environ["TMP_SETTINGS"], encoding="utf-8") as f: new = json.load(f)
 existing.setdefault("env", {}).update(new.get("env", {}))
-existing.setdefault("mcpServers", {}).update(new.get("mcpServers", {}))
 if "permissions" in new:
     allow = set(existing.get("permissions", {}).get("allow", [])) | set(new["permissions"].get("allow", []))
     existing.setdefault("permissions", {})["allow"] = sorted(allow)
