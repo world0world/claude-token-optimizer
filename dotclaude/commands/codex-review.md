@@ -1,9 +1,9 @@
 ---
-description: Spawn Haiku subagent to route a Codex MCP code review. Use from Sonnet impl session after a commit.
+description: Spawn Haiku subagent to route a Codex MCP code review. Use from Sonnet impl session after a commit. Named codex-review to avoid collision with built-in /review.
 allowed-tools: Agent, Bash, Read
 ---
 
-# /review $ARGUMENTS
+# /codex-review $ARGUMENTS
 
 Dispatch code review via a **Haiku 4.5** subagent that calls Codex MCP. Returns a verdict + top action items without bloating the main session.
 
