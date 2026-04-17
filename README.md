@@ -33,7 +33,15 @@ See [`docs/architecture.md`](docs/architecture.md) for full rationale.
 ```
 dotclaude/
 ├── settings.example.json      # Sanitized global settings (MCP, env, permissions)
-├── CLAUDE.md                  # Global rules: RTK usage + search routing
+├── CLAUDE.md                  # Global rules: session architecture + RTK + search
+├── commands/                  # Slash commands (copied to ~/.claude/commands/)
+│   └── tokenoptimizer.md      # /tokenoptimizer — per-project scaffold
+├── refs/                      # Detailed references (copied to ~/.claude/refs/)
+│   ├── rtk-commands.md
+│   ├── superpowers.md
+│   ├── cache-awareness.md
+│   ├── self-improvement.md
+│   └── file-system-as-state.md
 └── memory/                    # Optional global memory scaffold
 
 scripts/

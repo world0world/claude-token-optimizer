@@ -104,6 +104,33 @@ else
   cp "$REPO_DIR/dotclaude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
 fi
 
+# ---------- slash commands ----------
+mkdir -p "$CLAUDE_DIR/commands"
+for f in "$REPO_DIR"/dotclaude/commands/*.md; do
+  [ -f "$f" ] || continue
+  name=$(basename "$f")
+  target="$CLAUDE_DIR/commands/$name"
+  if [ -f "$target" ]; then
+    echo "==> command exists: $name (skipping)"
+  else
+    cp "$f" "$target"
+    echo "==> installed command: /$name"
+  fi
+done
+
+# ---------- refs ----------
+mkdir -p "$CLAUDE_DIR/refs"
+for f in "$REPO_DIR"/dotclaude/refs/*.md; do
+  [ -f "$f" ] || continue
+  name=$(basename "$f")
+  target="$CLAUDE_DIR/refs/$name"
+  if [ -f "$target" ]; then
+    echo "==> ref exists: $name (skipping)"
+  else
+    cp "$f" "$target"
+  fi
+done
+
 # ---------- RTK config ----------
 if command -v rtk >/dev/null 2>&1; then
   if [ "$OS" = "windows" ]; then

@@ -80,6 +80,27 @@ if (Test-Path $ClaudeMd) {
     Copy-Item "$RepoDir\dotclaude\CLAUDE.md" $ClaudeMd -Force
 }
 
+# slash commands
+$CmdDir = Join-Path $ClaudeDir "commands"
+New-Item -ItemType Directory -Force -Path $CmdDir | Out-Null
+Get-ChildItem "$RepoDir\dotclaude\commands\*.md" -ErrorAction SilentlyContinue | ForEach-Object {
+    $target = Join-Path $CmdDir $_.Name
+    if (Test-Path $target) {
+        Write-Host "==> command exists: $($_.Name) (skipping)"
+    } else {
+        Copy-Item $_.FullName $target -Force
+        Write-Host "==> installed command: /$($_.Name)"
+    }
+}
+
+# refs
+$RefDir = Join-Path $ClaudeDir "refs"
+New-Item -ItemType Directory -Force -Path $RefDir | Out-Null
+Get-ChildItem "$RepoDir\dotclaude\refs\*.md" -ErrorAction SilentlyContinue | ForEach-Object {
+    $target = Join-Path $RefDir $_.Name
+    if (-not (Test-Path $target)) { Copy-Item $_.FullName $target -Force }
+}
+
 if (Get-Command rtk -ErrorAction SilentlyContinue) {
     $RtkCfgDir = Join-Path $env:APPDATA "rtk"
     New-Item -ItemType Directory -Force -Path $RtkCfgDir | Out-Null
