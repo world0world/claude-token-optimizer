@@ -41,8 +41,8 @@ fi
 
 echo
 echo "[auth hints]"
-[ -f "$HOME/.gemini/credentials.json" ] 2>/dev/null && pass "gemini authed" || echo "  ? gemini not authed → run: gemini"
-[ -d "$HOME/.codex" ] 2>/dev/null                   && pass "codex authed"  || echo "  ? codex not authed → run: codex"
+{ [ -f "$HOME/.gemini/oauth_creds.json" ] || [ -n "${GEMINI_API_KEY:-}" ]; } && pass "gemini authed" || echo "  ? gemini not authed → run: gemini"
+{ [ -f "$HOME/.codex/auth.json" ] || [ -d "$HOME/.codex" ] || [ -n "${OPENAI_API_KEY:-}" ]; } && pass "codex authed" || echo "  ? codex not authed → run: codex"
 
 echo
 echo "==> done."
