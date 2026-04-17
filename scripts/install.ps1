@@ -41,7 +41,7 @@ p = os.environ["TMP_SETTINGS"]
 with open(p, encoding="utf-8") as f:
     s = json.load(f)
 s["mcpServers"]["gemini-cli"] = {"command": "cmd", "args": ["/c", "npx", "-y", "gemini-mcp-tool"]}
-s["mcpServers"]["codex"] = {"command": "cmd", "args": ["/c", "codex", "mcp"]}
+s["mcpServers"]["codex"] = {"command": "cmd", "args": ["/c", "codex", "mcp-server"]}
 for k in list(s.keys()):
     if k.startswith("_"): del s[k]
 for k in list(s["mcpServers"].keys()):

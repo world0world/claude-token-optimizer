@@ -53,10 +53,10 @@ os_name = "$OS"
 
 if os_name == "windows":
     s["mcpServers"]["gemini-cli"] = {"command": "cmd", "args": ["/c", "npx", "-y", "gemini-mcp-tool"]}
-    s["mcpServers"]["codex"] = {"command": "cmd", "args": ["/c", "codex", "mcp"]}
+    s["mcpServers"]["codex"] = {"command": "cmd", "args": ["/c", "codex", "mcp-server"]}
 else:
     s["mcpServers"]["gemini-cli"] = {"command": "npx", "args": ["-y", "gemini-mcp-tool"]}
-    s["mcpServers"]["codex"] = {"command": "codex", "args": ["mcp"]}
+    s["mcpServers"]["codex"] = {"command": "codex", "args": ["mcp-server"]}
 
 # strip internal comment fields
 for k in list(s.keys()):
