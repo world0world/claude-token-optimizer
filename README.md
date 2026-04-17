@@ -36,7 +36,7 @@ dotclaude/
 ├── CLAUDE.md                  # Global rules: session architecture + RTK + search
 ├── commands/                  # Slash commands (copied to ~/.claude/commands/)
 │   ├── tokenoptimizer.md      # /tokenoptimizer — per-project scaffold
-│   └── review.md              # /review — Haiku→Codex review from Sonnet session
+│   └── codex-review.md        # /codex-review — Haiku→Codex review from Sonnet session
 ├── refs/                      # Detailed references (copied to ~/.claude/refs/)
 │   ├── rtk-commands.md
 │   ├── superpowers.md
@@ -109,12 +109,14 @@ Managing three windows manually is tedious. The refined pattern uses **two** per
 
 From the Sonnet window:
 ```
-/review              # review HEAD
-/review HEAD~3..HEAD # review range
-/review plans/foo.md # review impl vs plan
+/codex-review              # review HEAD
+/codex-review HEAD~3..HEAD # review range
+/codex-review plans/foo.md # review impl vs plan
 ```
 
 A Haiku subagent spawns, calls `mcp__codex__review`, writes `plans/review-*.md`, returns a 200-word summary. No third window, no manual dispatch.
+
+`codex-review` is named to avoid collision with Claude Code's built-in `/review` (PR reviewer).
 
 ### Legacy three-window layout
 
