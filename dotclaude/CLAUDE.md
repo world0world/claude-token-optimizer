@@ -1,62 +1,47 @@
-# Global Claude Code Rules
+# CLAUDE.md — Agent Directives
 
-## RTK — Token-Optimized Command Wrappers
+**caveman mode** — Terse. Fragments OK. Preserve code/errors verbatim. Off: "normal mode".
 
-**Always prefix shell commands with `rtk`.** RTK compresses tool output 60-90%. Works as a passthrough when no dedicated filter exists, so it is always safe.
+## Session Architecture (3 sessions per project, fixed)
+- **S1 Opus 4.7** — Design/review. Writes `plans/` + `memory/decisions/`.
+- **S2 Sonnet 4.6** — Implementation. Logs to `memory/live-notes/`.
+- **S3 Haiku 4.5** — Orchestration + code review via `codex` MCP.
 
-Even inside chains:
-```bash
-# Wrong
-git add . && git commit -m "msg" && git push
+No mid-session `/model` switching. Shared state: memkraft + `plans/` + git commits. Use wiki-links `[[entity]]`.
+Handoff: S1 decisions → S2 implements → S3 codex review → decisions updated.
 
-# Right
-rtk git add . && rtk git commit -m "msg" && rtk git push
-```
+## Web Search
+Prefer **`gemini-cli` MCP** (`ask-gemini` + `googleSearch`) over built-in WebSearch.
 
-### Most-used wrappers
+## Pre-Work
+- **Delete before build.** Files >300 LOC: strip dead code first, separate commit.
+- **Phased execution.** Multi-file refactor = phases ≤5 files. Verify → wait → next.
+- **Plan ≠ Build.** "plan first" = plan output only. Vague asks = outline for approval.
+- **Spec-driven for 3+ step features.** Interview via `AskUserQuestion`.
 
-| Category | Commands |
-|----------|----------|
-| Git | `rtk git {status,log,diff,add,commit,push,pull,branch,fetch,stash,worktree}` |
-| GitHub | `rtk gh {pr view,pr checks,run list,issue list,api}` |
-| Build | `rtk {cargo build,cargo check,cargo clippy,tsc,lint,next build,prettier --check}` |
-| Test | `rtk {cargo test,vitest run,playwright test,pytest,go test,rspec,test <cmd>}` |
-| JS/TS | `rtk {pnpm list,pnpm install,npm run <s>,npx <cmd>,prisma}` |
-| Lint | `rtk {ruff check,rubocop,golangci-lint run}` |
-| Infra | `rtk {docker ps,docker images,docker logs,kubectl get,kubectl logs,terraform,make,dotnet}` |
-| AWS | `rtk aws {sts,ec2,lambda,logs,cloudformation,dynamodb,iam,s3}` |
-| Files | `rtk {ls,read,grep,find,smart <file>}` |
-| Debug | `rtk {err,log,json,deps,env,summary,diff}` |
-| Network | `rtk {curl,wget}` |
-| Meta | `rtk {gain,session,discover,proxy,init}` |
+## Edit Safety
+- **Re-read before each edit, read again after.** Edit silently fails on stale context. ≤3 edits per file before verify.
+- **No semantic search.** Rename = grep direct calls + types + string literals + dynamic imports + re-exports + tests. Assume grep missed something.
+- **One source of truth.** Never duplicate state to fix display bugs.
+- **Destructive safety.** Verify no references before delete. No force-push without instruction.
 
-Flags: `-u` / `--ultra-compact` for extra savings. `RTK_DISABLED=1 <cmd>` to bypass once.
+## Code Quality
+- **Forced verification.** Before "done": type-check strict + lint + tests + log check. No tests? State it.
+- **Senior fix, not band-aid.** Propose/implement structural solutions.
+- **Don't over-engineer.** Strip speculative code. No robotic comment blocks.
 
-Typical savings: **60-90%** on common operations.
+## Context Management
+- **Sub-agent swarming for >5 independent files.** ~167K tokens per agent.
+- **Context decay.** After 10+ messages → re-read before editing. Don't trust memory.
+- **File reads capped at 2000 lines.** Use offset/limit for >500 LOC.
+- **Tool result truncation at 50KB.** Suspect incomplete → re-run narrower.
 
-## Web Search Routing
+## One-word mode
+"yes" / "do it" / "push" = execute immediately. No recap.
 
-For Google / web search, prefer **Gemini CLI MCP tools** (`mcp__gemini-cli__*`) over the built-in WebSearch/WebFetch. Gemini grounds searches at lower marginal cost.
+---
 
-## Multi-Session Convention
+# RTK Auto-Enable
+Always prefix shell commands with `rtk`. Chains too (`rtk git add . && rtk git commit`). Filter present → compress; absent → passthrough. Always safe.
 
-This machine runs up to three parallel Claude Code windows per project:
-
-1. **Opus** — design, plans, review
-2. **Sonnet** — implementation, parallel subagents
-3. **Haiku** — orchestration, Codex review, search
-
-All three share state through:
-- `plans/*.md` (design docs)
-- `memory/` (MemKraft store)
-- `git` commits
-
-Never change `/model` mid-session (breaks prompt cache).
-
-## Caveman Output Style
-
-Output is compressed: drop articles, fragments OK, technical terms exact. Code blocks unchanged. Quoted errors exact. See caveman plugin for details.
-
-## MemKraft Memory
-
-Projects with a `./memory/` directory use MemKraft template mode. Store decisions in `memory/decisions/`, entities in `memory/entities/`, session notes in `memory/sessions/`. Search via `memkraft search <term>`.
+Refs: `~/.claude/refs/` — rtk-commands, superpowers, cache-awareness, self-improvement, file-system-as-state.
