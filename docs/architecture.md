@@ -11,83 +11,100 @@ Every Claude Code turn pays for:
 
 A single technique hits one driver. Combining them multiplies the saving.
 
-## The three-session split
+## Single session + sub-agents
 
-### Why not one Opus session?
+Main = **Opus 4.7, effort medium**. Orchestrates. Sub-agents run in isolated context windows and return distilled summaries only.
 
-Opus output costs $75/1M tokens. 80% of a typical task is mechanical implementation that Sonnet ($15/1M) handles fine. Using Opus for that 80% wastes ~$60 per million output tokens.
+| Sub-agent | Model | Role | Why this tier |
+|---|---|---|---|
+| `architect` | Opus (high) | Design → `plans/*.md`, `memory/decisions/` | Trade-off analysis needs strongest reasoning, run infrequently |
+| `coder` | Sonnet | Impl from plans, TDD | 80% of work is mechanical — Sonnet is 5× cheaper than Opus |
+| `reviewer` | Haiku | Local diff review → `plans/review-*.md` | Pattern-matching, no deep reasoning → cheapest tier |
+| `mcp-caller` | Haiku | gemini/codex MCP calls | Dispatch + distill, no thinking |
+| `web-researcher` | Haiku | Multi-source web research | Same — routing + summarization only |
 
-### Why three, not two?
+### Why isolated sub-agents vs multi-session
 
-Two-session (Opus design + Sonnet implement) captures most savings. The third (Haiku) adds:
-- **Independent verification** via Codex (GPT-5) — different family, catches Claude-specific blind spots.
-- **Cheap search orchestration** via Gemini MCP — Haiku is 15× cheaper than Opus for simple tool routing.
+Earlier design: 3 manual Claude Code windows (Opus/Sonnet/Haiku). Works, but:
+- User tracks which window does what
+- `/model` swap invalidates cache
+- No auto-handoff — manual copy-paste between windows
 
-Haiku's job is *not to think*. It dispatches, parses, files reports. Any thinking gets delegated upward.
+Single-session + sub-agent fixes all three:
+- Main dispatches via Agent tool
+- Each sub-agent has its **own context window** — raw tool output never leaks back to main
+- Cache per sub-agent persists across invocations within a session
+- `memkraft agent-save/load/handoff` shares state across dispatches
 
-### Per-session config
+### MCP scoping
 
-| Session | Model | effortLevel | alwaysThinking | Caveman | MCPs loaded |
-|---------|-------|-------------|----------------|---------|-------------|
-| 1 Design | Opus 4.7 | high | true | full | none |
-| 2 Implement | Sonnet 4.6 | medium | false | full | none |
-| 3 Orchestrate | Haiku 4.5 | low | false | ultra | gemini-cli, codex |
+MCP schemas are loaded every turn for sessions that have them registered. Sub-agents `architect`/`coder`/`reviewer` have **no MCP tools** in their frontmatter → zero schema overhead. Only `mcp-caller` and `web-researcher` pay the gemini/codex schema tax, and they're Haiku.
 
-MCP scoping matters. MCP schemas are loaded per session, every turn. Keeping Opus/Sonnet sessions MCP-free saves ~3-5k tokens/turn on the expensive models. Haiku absorbs the MCP cost because its per-token rate is 15-75× lower.
-
-MCP scoping in practice: use `enabledMcpjsonServers` allow-lists or different project folders with different `.mcp.json`. (Global `settings.json` applies to all — tradeoff: simplicity vs tighter scope. This repo ships global by default; advanced users can split.)
+Global `settings.json` no longer stores `mcpServers` (user-scope doesn't load them). MCPs are registered via `claude mcp add -s user` — each sub-agent's `tools:` allowlist decides which MCPs it actually sees.
 
 ## Handoff protocol
 
-Sessions don't share memory. They share **files**.
+Sub-agents don't share a live context. They share **files** + **memkraft state**.
 
 ```
-Session 1 (Opus)                         Session 2 (Sonnet)                       Session 3 (Haiku)
-───────────────                          ─────────────────                        ─────────────────
+main (Opus)                architect                   coder                      reviewer
+───────                    ─────────                   ─────                      ────────
 receive request
-write plans/feat-X.md       ────────────> read plans/feat-X.md
-                                         implement (TDD loop)
-                                         git commit
-                                                                   ────────────>  git log --oneline
-                                                                                  call mcp__codex__review
+dispatch architect   ───>  agent-inject architect
+                           write plans/feat-X.md
+                           agent-save + handoff coder
+                    <───   return summary
+dispatch coder       ───>                              agent-inject coder
+                                                       agent-load architect
+                                                       impl (TDD) + commit
+                                                       agent-save + handoff reviewer
+                    <───                               return SHA + summary
+dispatch reviewer    ───>                                                         agent-inject reviewer
+                                                                                  agent-load coder
                                                                                   write plans/review-feat-X.md
-read plans/review-feat-X.md <────────────
-amend plans/feat-X.md (v2)  ────────────> re-read, patch
+                    <───                                                          return verdict
+decide: ship/revise/escalate
 ```
 
-No shared context window. No race conditions between windows. Git is the synchronization primitive.
+Synchronization primitives: git commits + `plans/*.md` + `memkraft channel-save`.
 
-## Memory: MemKraft over MEMORY.md for multi-session
+## Memory: MemKraft over MEMORY.md
 
-MEMORY.md auto-loads everything each turn. Single index ~1.5KB is fine; grows linearly with project count.
+MEMORY.md auto-loads everything each turn. MemKraft template mode injects ~50-token L1 index into CLAUDE.md. Agent pulls L2 headers or L3 full files via Read on demand.
 
-MemKraft template mode injects a ~50-token L1 index into CLAUDE.md. Agent pulls L2 section headers or L3 full files via Read on demand. Net savings grows with memory size.
+Plus the sub-agent lifecycle commands:
+- `agent-inject <agent>` — prime an agent's context with prior task state
+- `agent-save <agent>` — persist context snapshot on return
+- `agent-handoff <from> <to>` — hand off task ID with note
+- `channel-save/load` — cache MCP results for reuse
+- `snapshot --include-content` — rollback point (PreCompact hook uses this)
+- `distill-decisions` / `open-loops` — extract structured state
 
-**Rule of thumb**: keep MEMORY.md for global personal notes; use MemKraft per project for team/session-shared knowledge.
+## Context compaction (automatic + manual)
+
+Hooks in `settings.json`:
+- **PreCompact** → `memkraft snapshot` + `agent-save main` before Claude's auto-compact
+- **Stop** → `agent-save main` + `distill-decisions` + `open-loops` (async)
+- **SubagentStop** → `memkraft dedup` (async)
+
+Main self-monitors: if 50+ turns, or 300KB+ tool output accumulated, or same file re-read 5+ times, or distilled result re-summoned raw → run compression pipeline. Then `/clear` + `/tokenoptimizer resume` restores state clean.
 
 ## Caveman output style
 
-Caveman drops articles, filler, and hedging from Claude's output. Technical content preserved. Code blocks untouched. Errors quoted exactly.
+Drops articles, filler, hedging. Technical content preserved. Code/errors quoted exactly. On a 2000-token reply, caveman full drops it to 700-1000. Output tokens dominate cost on expensive models — this stacks with model splitting.
 
-On a 2000-token reply, caveman full mode typically drops it to 700-1000. Output tokens dominate cost on expensive models — this stacks with model splitting.
-
-Three intensities:
-- `lite` — drop filler, keep grammar. Professional.
-- `full` — drop articles, fragments OK.
-- `ultra` — abbreviations, arrows for causality.
-
-Session 3 (Haiku) uses `ultra`. Haiku is cheap but its outputs still cost money per token; ultra mode removes everything unnecessary.
+Haiku sub-agents use `ultra`; main uses `full`.
 
 ## RTK for tool output
 
-Every `Bash` tool call's stdout is appended to Claude's context on the next turn. A verbose `git log` can be 5k tokens; `rtk git log` is ~1k. Applied across every shell operation in a session, this is often the single biggest save.
+Every `Bash` call's stdout is appended to Claude's next-turn context. Verbose `git log` = ~5k tokens; `rtk git log` = ~1k. Applied across every shell operation, often the single biggest save.
 
-RTK is a wrapper CLI — install with `cargo install rtk-cli`. The CLAUDE.md rule tells Claude to prefix every shell command. On Linux/WSL an optional PreToolUse hook can auto-wrap; on Windows native the CLAUDE.md rule is the enforcement.
+Install: `cargo install rtk-cli`. CLAUDE.md rule tells agents to prefix every shell command. Linux/WSL: optional PreToolUse hook auto-wraps. Windows native: CLAUDE.md rule only.
 
-Custom `.rtk/filters.toml` per project handles project-specific tools (build scripts, pipelines).
+Project-specific filters in `.rtk/filters.toml`.
 
 ## Thinking budget
 
-`effortLevel` + `alwaysThinkingEnabled` set the reasoning token budget. Global values force every session to pay the same budget — contradicting the role split.
+`effortLevel` + `alwaysThinkingEnabled` set reasoning budget. Global value forces all sub-agents to pay same budget — contradicting the tier split.
 
-**Solution**: keep global settings.json free of these flags. Set per-project via `.claude/settings.local.json`, or per-session via slash commands where the CLI supports it. The Opus design session wants `high`; Sonnet impl wants `medium`; Haiku orchestration wants `low`.
+**Solution**: main is set `model: opus, effortLevel: medium` globally. Each sub-agent md file declares its own `model:` — Claude Code harness uses per-agent budget. Don't set global `alwaysThinkingEnabled: true` unless you want Haiku to think too (expensive).

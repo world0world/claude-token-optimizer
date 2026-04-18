@@ -2,12 +2,15 @@
 
 ## MCP server not registering
 
-Check `~/.claude/settings.json` has `mcpServers` block. Restart Claude Code. Then in Claude:
+User-scope `settings.json` does **not** load `mcpServers` — register via CLI:
+```bash
+claude mcp add gemini-cli -s user -- npx -y gemini-mcp-tool
+claude mcp add codex -s user -- codex mcp-server
+# Windows (git-bash):
+MSYS_NO_PATHCONV=1 claude mcp add gemini-cli -s user -- cmd /c npx -y gemini-mcp-tool
+MSYS_NO_PATHCONV=1 claude mcp add codex -s user -- cmd /c codex mcp-server
 ```
-claude mcp list
-```
-
-On Windows, MCP commands must be wrapped with `cmd /c ...` — the installer handles this but manual edits may miss it.
+Then `claude mcp list` to verify. `install.sh` does this automatically.
 
 ## `memkraft init` fails with UnicodeEncodeError on Windows
 
@@ -30,16 +33,17 @@ Re-invoke with `/caveman full` or `/caveman ultra`. If it drifts repeatedly mid-
 ## Cache miss every turn
 
 Signs: first-turn-like latency, cost higher than expected. Causes:
-- `/model` swap mid-session
-- MCP server added/removed
+- `/model` swap on main session
+- MCP server added/removed mid-session
 - More than 5 minutes idle (TTL expired)
 - CLAUDE.md or settings.json edited externally
+- Agent md file edited — that sub-agent's cache invalidates
 
-Fix: don't swap models; keep MCPs static per session; reopen the session if idle past TTL.
+Fix: don't swap main model; keep MCPs static; reopen the session if idle past TTL; batch agent md edits before a fresh session.
 
-## Sonnet is re-asking Opus-level questions
+## Coder sub-agent bounces plan back
 
-The plan file is probably too thin. Opus should produce decisions, constraints, file list, test strategy — not "here's a feature, go implement it." If Sonnet keeps asking, the plan is under-specified.
+The plan file is probably too thin. `architect` should produce decisions, constraints, file list, test strategy — not "here's a feature, go implement it." If `coder` keeps returning "plan thin, need architect amendment", the plan is under-specified. Re-dispatch architect with specific gaps listed.
 
 ## Codex MCP review returns garbage
 
@@ -89,6 +93,7 @@ Add the command to `permissions.allow` in `~/.claude/settings.json`:
 Diagnose with the token-diet skill (or inspect manually):
 - Is effortLevel=high set globally? Move to per-project.
 - Is alwaysThinkingEnabled=true? Same.
-- Are you mid-session on Opus doing implementation work? Split windows.
+- Is main doing mechanical edits itself? Dispatch `coder` sub-agent instead.
+- Is every small task dispatching a sub-agent? Over-dispatch → cache-write churn. Handle trivial stuff inline on main.
 - Is caveman actually active? Check transcript for verbose replies.
 - Did cache get invalidated recently?
