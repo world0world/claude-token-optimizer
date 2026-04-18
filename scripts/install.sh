@@ -43,7 +43,7 @@ mkdir -p "$CLAUDE_DIR"
 TMP_SETTINGS="$(mktemp)"
 cp "$REPO_DIR/dotclaude/settings.example.json" "$TMP_SETTINGS"
 
-# Strip internal comment fields and mcpServers (MCPs registered via `claude mcp add`, not settings.json)
+# Strip internal comment fields and any mcpServers block (user-scope settings.json doesn't load mcpServers)
 python - <<PY
 import json, os
 p = os.environ["TMP_SETTINGS"]
@@ -83,11 +83,20 @@ with open(existing_path, encoding="utf-8") as f:
     existing = json.load(f)
 with open(os.environ["TMP_SETTINGS"], encoding="utf-8") as f:
     new = json.load(f)
-# shallow merge, new wins on conflicts for env/mcpServers, keep existing permissions additive
 existing.setdefault("env", {}).update(new.get("env", {}))
 if "permissions" in new:
     allow = set(existing.get("permissions", {}).get("allow", [])) | set(new["permissions"].get("allow", []))
     existing.setdefault("permissions", {})["allow"] = sorted(allow)
+# top-level scalars — only set if not present, don't clobber user choice
+for k in ("model", "effortLevel", "autoUpdatesChannel"):
+    if k in new and k not in existing:
+        existing[k] = new[k]
+# hooks — per-event, new wins per event if event not in existing
+if "hooks" in new:
+    existing.setdefault("hooks", {})
+    for event, handlers in new["hooks"].items():
+        if event not in existing["hooks"]:
+            existing["hooks"][event] = handlers
 with open(existing_path, "w", encoding="utf-8") as f:
     json.dump(existing, f, indent=2, ensure_ascii=False)
 PY
@@ -104,6 +113,21 @@ else
   cp "$REPO_DIR/dotclaude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
 fi
 
+# ---------- sub-agents ----------
+mkdir -p "$CLAUDE_DIR/agents"
+for f in "$REPO_DIR"/dotclaude/agents/*.md; do
+  [ -f "$f" ] || continue
+  name="$(basename "$f")"
+  target="$CLAUDE_DIR/agents/$name"
+  if [ -f "$target" ]; then
+    cp "$f" "$target.optimizer"
+    echo "    agent exists: $name → saved as $name.optimizer"
+  else
+    cp "$f" "$target"
+    echo "    installed agent: $name"
+  fi
+done
+
 # ---------- slash commands ----------
 mkdir -p "$CLAUDE_DIR/commands"
 for f in "$REPO_DIR"/dotclaude/commands/*.md; do
@@ -111,7 +135,8 @@ for f in "$REPO_DIR"/dotclaude/commands/*.md; do
   name=$(basename "$f")
   target="$CLAUDE_DIR/commands/$name"
   if [ -f "$target" ]; then
-    echo "==> command exists: $name (skipping)"
+    cp "$f" "$target.optimizer"
+    echo "==> command exists: $name → saved as $name.optimizer"
   else
     cp "$f" "$target"
     echo "==> installed command: /$name"
@@ -128,6 +153,7 @@ for f in "$REPO_DIR"/dotclaude/refs/*.md; do
     echo "==> ref exists: $name (skipping)"
   else
     cp "$f" "$target"
+    echo "==> installed ref: $name"
   fi
 done
 

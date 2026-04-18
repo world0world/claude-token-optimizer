@@ -2,16 +2,27 @@
 
 **caveman mode** — Terse. Fragments OK. Preserve code/errors verbatim. Off: "normal mode".
 
-## Session Architecture (3 sessions per project, fixed)
-- **S1 Opus 4.7** — Design/review. Writes `plans/` + `memory/decisions/`.
-- **S2 Sonnet 4.6** — Implementation. Logs to `memory/live-notes/`.
-- **S3 Haiku 4.5** — Orchestration + code review via `codex` MCP.
+## Session Architecture (single-session + sub-agents)
+Main = **Opus 4.7, effort medium**. Handles conversation and orchestration.
 
-No mid-session `/model` switching. Shared state: memkraft + `plans/` + git commits. Use wiki-links `[[entity]]`.
-Handoff: S1 decisions → S2 implements → S3 codex review → decisions updated.
+Sub-agents in `~/.claude/agents/`:
+- **`architect`** (Opus, effort high) — design → `plans/*.md` + `memory/decisions/`. No code.
+- **`coder`** (Sonnet) — impl from `plans/`. TDD. Bounce thin plans back to architect.
+- **`reviewer`** (Haiku) — local diff review → `plans/review-*.md`. No external MCPs.
+- **`mcp-caller`** (Haiku) — only `gemini-cli` / `codex` MCP calls. Distills result.
+- **`web-researcher`** (Haiku) — multi-source web research via Gemini. Not for single facts.
+
+Dispatch:
+- Design needed → `architect` → plan → `coder`
+- Impl done → `reviewer` → (escalate?) → `mcp-caller` for codex 2nd opinion
+- Web search / large-file analysis → `mcp-caller` (gemini)
+- Multi-source market/trend/comparison → `web-researcher`
+- >5 independent files → multiple `coder`s in one dispatch message
+
+State sharing: memkraft + `plans/` + git commits. Wiki-link `[[entity]]`.
 
 ## Web Search
-Prefer **`gemini-cli` MCP** (`ask-gemini` + `googleSearch`) over built-in WebSearch.
+Not built-in WebSearch → route through `mcp-caller` or `web-researcher`.
 
 ## Pre-Work
 - **Delete before build.** Files >300 LOC: strip dead code first, separate commit.
@@ -36,6 +47,20 @@ Prefer **`gemini-cli` MCP** (`ask-gemini` + `googleSearch`) over built-in WebSea
 - **File reads capped at 2000 lines.** Use offset/limit for >500 LOC.
 - **Tool result truncation at 50KB.** Suspect incomplete → re-run narrower.
 
+## Context Self-Monitoring
+If 2+ of: 50+ turns, 300KB+ tool output accumulated, same file re-read 5+ times, distilled subagent output re-summoned in raw form → run compression pipeline:
+```bash
+memkraft summarize --max-length 400
+memkraft dedup
+memkraft decay --days 90
+memkraft distill-decisions
+memkraft agent-save main --context "<progress summary>" --data '{"plan":"...","next":"..."}'
+memkraft snapshot --label "pre-clear-$(date +%s)" --include-content
+```
+Then suggest: **"Compressed. Run `/clear` then `/tokenoptimizer resume`."**
+
+Urgent (tool output 500KB+ or 100+ turns): recommend `/tokenoptimizer compact`.
+
 ## One-word mode
 "yes" / "do it" / "push" = execute immediately. No recap.
 
@@ -43,5 +68,3 @@ Prefer **`gemini-cli` MCP** (`ask-gemini` + `googleSearch`) over built-in WebSea
 
 # RTK Auto-Enable
 Always prefix shell commands with `rtk`. Chains too (`rtk git add . && rtk git commit`). Filter present → compress; absent → passthrough. Always safe.
-
-Refs: `~/.claude/refs/` — rtk-commands, superpowers, cache-awareness, self-improvement, file-system-as-state.

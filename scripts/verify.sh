@@ -21,6 +21,16 @@ echo "[claude config]"
 [ -f "$HOME/.claude/CLAUDE.md" ]     && pass "CLAUDE.md present"     || fail "CLAUDE.md missing"
 
 echo
+echo "[sub-agents]"
+for a in architect coder reviewer mcp-caller web-researcher; do
+  [ -f "$HOME/.claude/agents/$a.md" ] && pass "agent: $a" || fail "agent missing: $a"
+done
+
+echo
+echo "[slash commands]"
+[ -f "$HOME/.claude/commands/tokenoptimizer.md" ] && pass "/tokenoptimizer" || fail "/tokenoptimizer missing"
+
+echo
 echo "[MCP registration]"
 python - <<'PY' 2>/dev/null
 import json, os, sys

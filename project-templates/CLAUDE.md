@@ -3,47 +3,50 @@
 ## Purpose
 Brief description of what this project does.
 
-## Three-Session Workflow
+## Session Architecture (single-session + sub-agents)
 
-This project uses the multi-session pattern from `claude-token-optimizer`:
+Main = **Opus 4.7, effort medium**. Handles conversation and orchestration.
 
-| Session | Model | Role |
-|---------|-------|------|
-| 1 | Opus 4.7 (high effort) | Design, plan writing, review diffs |
-| 2 | Sonnet 4.6 (medium) | Implement `plans/*.md`, parallel subagents |
-| 3 | Haiku 4.5 (low) | Codex MCP review, Gemini MCP search, orchestration |
+Sub-agents (`~/.claude/agents/`):
 
-All three share `memory/` (MemKraft), `plans/`, and git history.
+| Agent | Model | Role |
+|---|---|---|
+| `architect` | Opus (high) | Design → `plans/*.md`, `memory/decisions/`. No code. |
+| `coder` | Sonnet | Implements from `plans/`. TDD. Bounces thin plans back. |
+| `reviewer` | Haiku | Local diff review → `plans/review-*.md`. No external MCPs. |
+| `mcp-caller` | Haiku | Only `gemini-cli` / `codex` MCP calls. Distills result. |
+
+**Dispatch**:
+- Design needed → `architect` → plan → `coder`
+- Impl done → `reviewer` → (escalate?) → `mcp-caller` for codex 2nd opinion
+- Web search / large-file analysis → `mcp-caller` (gemini)
+- >5 independent files → dispatch multiple `coder`s in one message
 
 ## Handoff convention
 
-- **Design** → `plans/<feature>.md` (session 1 writes)
-- **Decision log** → `memory/decisions/` (session 1 or 3)
-- **Entity facts** → `memory/entities/`
-- **Session notes** → `memory/sessions/`
-- **Code** → committed directly (session 2)
-- **Reviews** → `plans/review-<feature>.md` (session 3)
+- `plans/<feature>.md` — architect writes, coder reads
+- `plans/review-<feature>.md` — reviewer writes
+- `memory/decisions/<date>-<topic>.md` — architect or main
+- `memory/entities/<name>.md` — stable facts, wiki-linked `[[entity]]`
+- Code → git commits (coder)
+- State sharing: `memkraft agent-save` / `agent-load` / `agent-handoff` / `channel-save`
+
+## memkraft lifecycle
+
+Each sub-agent runs `memkraft agent-inject` on invoke and `memkraft agent-save` + handoff on return. See `~/.claude/agents/*.md` for exact commands.
+
+Manual compression: `/tokenoptimizer compact` → `/clear` → `/tokenoptimizer resume`.
 
 ## RTK
 
-All shell commands are `rtk`-prefixed. Custom filters in `.rtk/filters.toml`.
-
-## MemKraft
-
-Store:
-- `memory/entities/<name>.md` — stable facts per entity
-- `memory/decisions/<date>-<topic>.md` — why we chose X over Y
-- `memory/live-notes/` — WIP thoughts
-
-Search: `memkraft search <term>`
+All shell commands `rtk`-prefixed (including chains). Custom filters in `.rtk/filters.toml`.
 
 ## Local overrides
 
-Put per-project Claude Code settings in `.claude/settings.local.json` (gitignored). Example:
+Per-project settings in `.claude/settings.local.json` (gitignored). Example:
 ```json
 {
   "effortLevel": "high",
   "alwaysThinkingEnabled": true
 }
 ```
-Adjust per-session by opening this folder with a different `/model`.

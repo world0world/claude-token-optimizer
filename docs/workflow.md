@@ -3,113 +3,106 @@
 ## Opening a project
 
 ```bash
-cd /path/to/project        # MemKraft + per-project CLAUDE.md load automatically
+cd /path/to/project   # memkraft + per-project CLAUDE.md load automatically
 ```
 
-Open three Claude Code windows in the same folder:
-
-| Window | Model | Effort | Caveman |
-|--------|-------|--------|---------|
-| 1 | `/model opus` | high | full |
-| 2 | `/model sonnet` | medium | full |
-| 3 | `/model haiku` | low | ultra |
-
-Leave them running. Cache stays warm; first-turn write cost is paid once per session.
+Open **one** Claude Code window. Main session = Opus 4.7 / effort medium. Sub-agents dispatch from here.
 
 ## Typical feature routine
 
-### Step 1 — Brief in window 1 (Opus)
+### Step 1 — Brief main (Opus)
 
 ```
 User: "Add feature X that does Y. Constraints: Z."
-Opus: <reads memory/, skims code>
-      <writes plans/feat-X.md with TDD plan, file list, decision rationale>
-      <commits: plans: feat-X draft>
+Main: <reads memory/, skims code>
+      <decides: needs design → dispatch architect>
 ```
 
-### Step 2 — Implement in window 2 (Sonnet)
+### Step 2 — Architect (Opus/high)
 
-```
-User: "Read plans/feat-X.md. Implement with TDD."
-Sonnet: <writes failing test>
-        <implements>
-        <dispatches parallel Sonnet subagents for independent files>
-        <runs rtk pytest>
-        <commits: impl: feat-X>
-```
+Main invokes `architect` sub-agent via Agent tool. Architect:
+- Runs `memkraft agent-inject architect` on invoke
+- Writes `plans/feat-X.md` (file list, TDD plan, decision rationale)
+- Writes `memory/decisions/<date>-feat-X.md`
+- Returns: `memkraft agent-save` + `distill-decisions` + `agent-handoff coder`
 
-Parallel subagents are the secret weapon here. Use the `superpowers:dispatching-parallel-agents` skill.
+### Step 3 — Coder (Sonnet)
 
-### Step 3 — Review in window 3 (Haiku)
+Main dispatches `coder` with task ID. Coder:
+- `memkraft agent-inject coder` + `agent-load architect` to pick up plan
+- Writes failing test → implements → `rtk pytest`
+- Commits `[coder] impl: feat-X`
+- Returns: `agent-save` with SHA + `agent-handoff coder reviewer`
+- Plan thin? STOP, bounce to architect.
 
-```
-User: "Review latest commit with codex. Save to plans/review-feat-X.md."
-Haiku: <rtk git show HEAD>
-       <mcp__codex__review tool call with diff>
-       <parses codex output, writes plans/review-feat-X.md>
-       <memkraft add decision ...>
-```
+**Parallel**: >5 independent files → main dispatches multiple `coder`s in a single Agent-tool message.
 
-### Step 4 — Amend in window 1 (Opus)
+### Step 4 — Reviewer (Haiku)
 
-```
-User: "Read plans/review-feat-X.md. Update plans/feat-X.md if needed."
-Opus: <reviews codex feedback>
-      <decides which suggestions to accept>
-      <amends plan>
-      <commits: plans: feat-X v2>
-```
+Main dispatches `reviewer`. Reviewer:
+- `agent-inject reviewer` + `agent-load coder` to get SHA/files
+- Runs `rtk git show HEAD`
+- Writes `plans/review-feat-X.md`: matches plan? tests? findings?
+- Returns: `ship` / `revise` / `escalate-to-mcp-caller`
+- `open-loops` extracts unresolved items.
 
-### Step 5 — Patch in window 2 (Sonnet)
+### Step 5 — (Optional) MCP-caller (Haiku)
 
-Sonnet reads the updated plan, makes changes, tests pass, commits.
+If reviewer escalates or main wants codex 2nd opinion / web search:
+- `mcp-caller` calls `mcp__codex__codex` or `mcp__gemini-cli__ask-gemini`
+- Caches result: `memkraft channel-save "mcp-<hash>"`
+- Returns distilled findings (Source / Key findings / Confidence).
 
-### Step 6 — Final verify in window 3
+### Step 6 — Main decides next
 
-```
-User: "Final review. Green-light or regressions?"
-```
+Main reads review + any MCP input, decides:
+- Ship → commit, update memory
+- Revise → dispatch `coder` again with notes
+- Redesign → bounce to `architect`
 
-## Anti-patterns
+## Context management
 
-**Don't** swap models mid-window. Cache cost is ~$0.55 per swap on Opus.
+Hooks (`~/.claude/settings.json`):
+- **PreCompact** → `memkraft snapshot --include-content` + `agent-save main`
+- **Stop** → `agent-save main` + `distill-decisions` + `open-loops` (async)
+- **SubagentStop** → `memkraft dedup` (async)
 
-**Don't** copy-paste large tool output between windows. Use file paths + git commits.
+Self-monitoring (main watches for):
+- 50+ turns
+- 300KB+ tool output accumulated
+- Same file re-read 5+ times
+- Distilled subagent result re-summoned in raw form
 
-**Don't** run the same expensive command in multiple windows. One window runs it, commits the output file, others read.
-
-**Don't** let Opus do mechanical edits. If Opus is editing > 3 files in a row with no design decisions, kick the task to Sonnet.
-
-**Don't** ask Haiku to reason deeply. Haiku routes, summarizes, dispatches. Complex reasoning → bump to Sonnet or Opus.
+→ Run `/tokenoptimizer compact` → `/clear` → `/tokenoptimizer resume`.
 
 ## Memory discipline
 
-After each session:
+Architect / main writes decisions via `memkraft` entities. Wiki-links `[[FeatureX]]` auto-resolve.
 
+```bash
+memkraft remember "chose X over Y for feat-X — faster under write-heavy load"
+memkraft link FeatureX --type feature
 ```
-memkraft add decision "chose-X-over-Y-for-feat-X" \
-  --reason "X is faster under write-heavy load (see codex review)"
-
-memkraft add entity "FeatureX" --type feature \
-  --notes "owner: session-2, tests: tests/feat_x/"
-```
-
-Next session's L1 index picks these up automatically.
 
 ## Weekly maintenance
 
 ```bash
-rtk gain --all --format json > ~/rtk-weekly.json   # adoption metrics
-rtk session                                         # check recent adoption %
-memkraft doctor                                     # memory health
+/tokenoptimizer dream    # memkraft dream + decay + dedup + doctor + stats
+rtk session              # RTK adoption %
 ```
 
-If `rtk session` shows adoption < 80%, refresh the CLAUDE.md rule or update RTK.
+If adoption < 80%, refresh CLAUDE.md rule or update RTK.
 
-## When to break the routine
+## Anti-patterns
 
-Small bugs (< 30 min fix): single Sonnet window. No plan file. Just commit.
+- **Don't** do mechanical edits in main — dispatch `coder`.
+- **Don't** call `codex` / `gemini` MCPs directly from main — route through `mcp-caller`.
+- **Don't** let `reviewer` rewrite code — bounce to `coder`.
+- **Don't** copy-paste large tool output back into main — use file paths + `memkraft channel-load`.
+- **Don't** swap main model mid-session. Cache cost is real.
 
-Exploratory spikes: single Opus window with `/caveman full`. No subagents; Opus thinks, writes throwaway code.
+## When to skip orchestration
 
-Emergency firefights: single Opus window, no effort cap, no caveman. Token cost doesn't matter when production is down.
+- Small bugs (<30 min): main handles inline. No plan file.
+- Exploratory spikes: main in caveman mode, throwaway code.
+- Emergency firefights: no effort cap, skip review chain.

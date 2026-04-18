@@ -1,133 +1,147 @@
 ---
-description: Initialize current project with Claude Token Optimizer scaffold (MemKraft memory, RTK filters, plans/, per-session effort config)
-allowed-tools: Bash, Write, Read, Edit
+description: Token optimizer — setup/verify/workflow/compact/snapshot/resume/handoff/dream. Main session's memkraft + context ops.
+argument-hint: "[help|verify|workflow|compact|snapshot|resume|handoff|dream]"
+allowed-tools: Bash, Read, Write, Edit
 ---
 
-# /tokenoptimizer
+# Token Optimizer
 
-Set up the current working directory with the Claude Token Optimizer scaffold. Run this on any new project to enable the 3-session cost-optimized workflow.
+User arg: `$ARGUMENTS`
 
-## What this does
+Dispatch based on first word of `$ARGUMENTS`:
 
-1. **MemKraft memory init** — `memory/` with entities/, decisions/, sessions/ subdirs for multi-session shared state
-2. **RTK project filters** — `.rtk/filters.toml` for project-specific tool output compression
-3. **Plans directory** — `plans/` for Opus→Sonnet handoff documents
-4. **Per-project effort config** — `.claude/settings.local.json` with reasonable defaults (not committed)
-5. **Project CLAUDE.md** — if absent, writes template describing the 3-session convention
-6. **.gitignore guards** — ensures `memory/inbox/`, `.memkraft/`, `.rtk/tee/`, `.claude/settings.local.json` are ignored
+---
 
-## Arguments
+## `` (empty) → SETUP current project
 
-`$ARGUMENTS` — optional project name (used only in the CLAUDE.md template header). If empty, uses directory name.
+Run:
+```bash
+bash ~/claude-token-optimizer/scripts/setup-project.sh
+```
+Report files created (memory/, plans/, .rtk/, CLAUDE.md, .gitignore). Suggest first commit.
 
-## Steps
+---
 
-Execute in order. Report each step's result concisely.
+## `verify` → VERIFY install
 
-### 1. Pre-flight check
+Run:
+```bash
+memkraft --version && codex --version && gemini --version 2>&1 | head -1 && rtk --version && claude mcp list
+```
+Flag missing/failing with fix hint from `~/claude-token-optimizer/docs/troubleshooting.md`.
+
+Also verify sub-agents exist:
+```bash
+ls ~/.claude/agents/{architect,coder,reviewer,mcp-caller}.md
+```
+
+---
+
+## `workflow` → SHOW single-session + sub-agent workflow
+
+Main = Opus 4.7, effort medium. Sub-agents in `~/.claude/agents/`:
+
+| Agent | Model | Role | memkraft lifecycle |
+|---|---|---|---|
+| `architect` | Opus/high | design → `plans/`, `memory/decisions/` | invoke: `agent-inject architect` / return: `agent-save` + `distill-decisions` + `agent-handoff coder` |
+| `coder` | Sonnet | impl from plans, TDD | invoke: `agent-load architect` / return: `agent-save` + `agent-handoff reviewer` |
+| `reviewer` | Haiku | local diff review → `plans/review-*.md` | invoke: `agent-load coder` / return: `agent-save` + `open-loops` |
+| `mcp-caller` | Haiku | gemini/codex MCP calls | invoke: `channel-load <cache>` / return: `channel-save` + `agent-save` |
+
+**Dispatch flow**: main (Opus) → architect → main → coder → main → reviewer → (escalate?) → mcp-caller → main.
+
+**Handoff chain**:
+```bash
+memkraft agent-handoff architect coder --task T-42
+memkraft agent-handoff coder reviewer --task T-42
+memkraft agent-handoff reviewer mcp-caller --task T-42  # only if escalate
+```
+
+**Parallel**: >5 independent files → dispatch multiple `coder`s in ONE message.
+
+---
+
+## `compact` → MANUAL compression pipeline
+
+Run in order, report what happened at each step:
+```bash
+memkraft summarize --max-length 400
+memkraft dedup
+memkraft decay --days 90
+memkraft distill-decisions
+memkraft open-loops
+memkraft agent-save main --context "manual compact $(date -Iseconds)" --data '{"reason":"user-triggered"}'
+memkraft snapshot --label "pre-clear-$(date +%s)" --include-content
+```
+After completion: tell user **"State saved. Run `/clear` then `/tokenoptimizer resume` in new session."**
+
+---
+
+## `snapshot [label]` → SAVE rollback point
+
+If `$ARGUMENTS` = "snapshot foo":
+```bash
+memkraft snapshot --label "foo-$(date +%s)" --include-content
+memkraft snapshot-list | head -5
+```
+Returns snapshot ID for time-travel reference.
+
+---
+
+## `resume [agent]` → LOAD state after /clear
+
+If no agent specified → default "main":
+```bash
+memkraft agent-inject ${AGENT:-main} --max-history 10
+```
+Paste result block into context. Report what was restored (task, decisions, open loops).
+
+If user specifies agent (e.g. `resume coder`):
+```bash
+memkraft agent-inject coder --task "$TASK_ID" --max-history 10
+```
+
+---
+
+## `handoff <from> <to> [note]` → AGENT handoff
+
+Parse `$ARGUMENTS` = "handoff architect coder plan locked":
+```bash
+memkraft agent-handoff <from> <to> --task "$TASK_ID" --note "<note>"
+```
+Confirm handoff saved.
+
+---
+
+## `dream` → MAINTENANCE cycle (nightly recommended)
 
 ```bash
-pwd
-command -v memkraft >/dev/null || echo "WARN: memkraft not installed; install via: pipx install memkraft"
-command -v rtk >/dev/null || echo "WARN: rtk not installed; install via: cargo install rtk-cli"
+memkraft dream --resolve-conflicts
+memkraft decay --days 90
+memkraft dedup
+memkraft doctor
+memkraft stats --export json
+```
+Report: conflicts resolved, stale entries flagged, duplicates merged, health status.
+
+---
+
+## `help` → SHOW usage
+
+```
+/tokenoptimizer                  scaffold current project
+/tokenoptimizer verify           check tools + MCPs + agents
+/tokenoptimizer workflow         show sub-agent dispatch flow
+/tokenoptimizer compact          manual context compression pipeline
+/tokenoptimizer snapshot [label] save rollback point
+/tokenoptimizer resume [agent]   restore state after /clear (default: main)
+/tokenoptimizer handoff <from> <to> [note]  agent-to-agent handoff
+/tokenoptimizer dream            nightly maintenance (dedup/decay/conflicts)
+/tokenoptimizer help             this message
 ```
 
-If `memkraft` missing, abort and tell user to run the claude-token-optimizer install script first.
+Repo: `~/claude-token-optimizer/` · Agents: `~/.claude/agents/` · Hooks: `~/.claude/settings.json`
 
-### 2. MemKraft init
+---
 
-```bash
-PYTHONUTF8=1 PYTHONIOENCODING=utf-8 memkraft init --template claude-code
-```
-
-Preserves existing files. Safe to re-run.
-
-### 3. RTK filters
-
-Create `.rtk/filters.toml` if absent. Use the Python ML template if the project has a `pyproject.toml` or `requirements.txt`, otherwise use the generic template. Template content lives in `~/claude-token-optimizer/rtk/filters-samples/` — copy whichever applies. If that path does not exist on this machine, inline a minimal template:
-
-```toml
-schema_version = 1
-
-# [filters.my-tool]
-# match_command = "^my-tool"
-# strip_ansi = true
-# strip_lines_matching = ["^\\s*$"]
-# max_lines = 40
-```
-
-### 4. Plans directory
-
-```bash
-mkdir -p plans
-[ -f plans/.gitkeep ] || touch plans/.gitkeep
-```
-
-### 5. Per-project settings.local.json
-
-Create `.claude/settings.local.json` only if absent. Content:
-
-```json
-{
-  "_comment": "Per-project overrides. NOT committed. Adjust effortLevel when opening a specific session.",
-  "effortLevel": "medium",
-  "alwaysThinkingEnabled": false
-}
-```
-
-Tell the user: for the design (Opus) session, bump `effortLevel` to `high` and `alwaysThinkingEnabled` to `true` in this file before opening that window. For Sonnet implementation: `medium` / `false`. For Haiku orchestration: `low` / `false`.
-
-### 6. Project CLAUDE.md
-
-If `./CLAUDE.md` does not exist, write one with this structure (replace `<NAME>` with `$ARGUMENTS` or the current dir name):
-
-```markdown
-# Project: <NAME>
-
-## Three-Session Workflow
-
-| Session | Model | Role |
-|---------|-------|------|
-| 1 | Opus (high) | Design, plans, review |
-| 2 | Sonnet (medium) | Implementation |
-| 3 | Haiku (low) | Codex review, search, orchestration |
-
-All three share `memory/`, `plans/`, and git.
-
-## Handoff
-
-- Design → `plans/<feature>.md`
-- Decisions → `memory/decisions/`
-- Entities → `memory/entities/`
-- Code → git commits (session 2 authors)
-- Reviews → `plans/review-<feature>.md`
-
-## RTK
-
-All shell commands `rtk`-prefixed. Custom filters in `.rtk/filters.toml`.
-```
-
-### 7. .gitignore guards
-
-Append (if not already present):
-```
-memory/inbox/
-.memkraft/
-.rtk/tee/
-.claude/settings.local.json
-```
-
-### 8. Report
-
-Summarize what was created, what was preserved, and next steps:
-
-- If new project: remind user to `rtk git add CLAUDE.md memory/ .rtk/ plans/ .gitignore` and commit
-- Print the 3-window opening sequence:
-  ```
-  Window 1: /model opus     → edit settings.local.json: high/true
-  Window 2: /model sonnet   → edit settings.local.json: medium/false
-  Window 3: /model haiku    → edit settings.local.json: low/false
-  ```
-- Suggest `memkraft doctor` to confirm memory health
-
-Keep output under ~15 lines. Caveman style if active.
+If `$ARGUMENTS` first word is not in the above list, show `help` and ask user to pick valid subcommand.
