@@ -66,10 +66,17 @@ Claude Code reads `settings.json` on startup. Fully restart the CLI, not just th
 
 Check:
 ```bash
-memkraft doctor
+memkraft doctor --fix
 ls memory/entities/
 ```
 Empty memory = nothing to find. Write at least one entity or decision to test search.
+
+## MemKraft outdated (< 2.0.0)
+
+```bash
+memkraft selfupdate
+```
+2.0+ adds: `templates`, `mcp` subcommands, `watch`, `health`, `flush`, `compact`, `digest`, `track_document`, `search_precise`. All 0.8.x commands remain compatible.
 
 ## Gemini MCP search times out
 

@@ -27,12 +27,15 @@ Report files created (memory/, plans/, .rtk/, CLAUDE.md, .gitignore). Suggest fi
 Run:
 ```bash
 memkraft --version && codex --version && gemini --version 2>&1 | head -1 && rtk --version && claude mcp list
+memkraft doctor --fix
+memkraft mcp doctor 2>/dev/null || true
 ```
 Flag missing/failing with fix hint from `~/claude-token-optimizer/docs/troubleshooting.md`.
+memkraft 2.0+ required. Older: `memkraft selfupdate`.
 
 Also verify sub-agents exist:
 ```bash
-ls ~/.claude/agents/{architect,coder,reviewer,mcp-caller}.md
+ls ~/.claude/agents/{architect,coder,reviewer,mcp-caller,web-researcher}.md
 ```
 
 ---
@@ -47,6 +50,7 @@ Main = Opus 4.7, effort medium. Sub-agents in `~/.claude/agents/`:
 | `coder` | Sonnet | impl from plans, TDD | invoke: `agent-load architect` / return: `agent-save` + `agent-handoff reviewer` |
 | `reviewer` | Haiku | local diff review → `plans/review-*.md` | invoke: `agent-load coder` / return: `agent-save` + `open-loops` |
 | `mcp-caller` | Haiku | gemini/codex MCP calls | invoke: `channel-load <cache>` / return: `channel-save` + `agent-save` |
+| `web-researcher` | Haiku | multi-source web research via Gemini | invoke: `agent-inject` / return: `agent-save` |
 
 **Dispatch flow**: main (Opus) → architect → main → coder → main → reviewer → (escalate?) → mcp-caller → main.
 
@@ -119,7 +123,8 @@ Confirm handoff saved.
 memkraft dream --resolve-conflicts
 memkraft decay --days 90
 memkraft dedup
-memkraft doctor
+memkraft doctor --fix
+memkraft health 2>/dev/null || true
 memkraft stats --export json
 ```
 Report: conflicts resolved, stale entries flagged, duplicates merged, health status.
