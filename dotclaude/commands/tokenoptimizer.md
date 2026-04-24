@@ -12,13 +12,32 @@ Dispatch based on first word of `$ARGUMENTS`:
 
 ---
 
-## `` (empty) → SETUP current project
+## `` (empty) → SETUP current project (memkraft-as-vault mode)
+
+Scaffolds the current directory into a memkraft-first project — `memory/` IS the vault, optionally opened in Obsidian for graph view. No separate Obsidian vault path needed.
 
 Run:
 ```bash
 bash ~/claude-token-optimizer/scripts/setup-project.sh
 ```
-Report files created (memory/, plans/, .rtk/, CLAUDE.md, .gitignore). Suggest first commit.
+
+Creates:
+- `memory/{entities,decisions,inbox,live-notes}/` — markdown memory
+- `memory/live-notes/roadmap.md` — fill in milestones
+- `memory/decisions/<today>-kickoff.md` — fill in one-line why
+- `plans/` — architect output dir
+- `.rtk/filters.toml` — project token filters
+- `CLAUDE.md` — with paths block + Obsidian hint
+- `.obsidian/app.json` — lets user open folder in Obsidian instantly
+- `.gitignore` — memory/inbox, .memkraft, .rtk/tee, .obsidian/workspace
+
+Also runs `memkraft index` so search picks up new files.
+
+After scaffold, instruct user:
+1. Fill in `memory/decisions/<today>-kickoff.md` (the "why")
+2. Fill in `memory/live-notes/roadmap.md` (milestones)
+3. (Optional) Open folder in Obsidian for editing with graph view
+4. `rtk git add ... && rtk git commit`
 
 ---
 

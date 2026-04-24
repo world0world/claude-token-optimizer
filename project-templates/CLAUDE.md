@@ -3,6 +3,20 @@
 ## Purpose
 Brief description of what this project does.
 
+## Paths
+
+- **Working memory**: `./memory/` (entities, decisions, inbox, live-notes)
+- **Plans**: `./plans/` (architect output, coder input)
+- **Roadmap**: `./memory/live-notes/roadmap.md`
+- **Kickoff decision**: `./memory/decisions/` (first file — why this project exists)
+- **Global memory**: `C:/Users/every/.claude/projects/C--Users-every/memory/`
+
+Before answering "why did we X?" → read `memory/decisions/` + `memory/live-notes/` first.
+
+## Editing memory
+
+`memory/` is pure markdown. Open this repo folder in **Obsidian** as a vault for graph view + backlinks + live preview. No separate vault needed. Short facts via CLI (`memkraft track`, `memkraft update`); long design docs in Obsidian directly.
+
 ## Session Architecture (single-session + sub-agents)
 
 Main = **Opus 4.7, effort medium**. Handles conversation and orchestration.

@@ -32,12 +32,73 @@ if [ ! -f CLAUDE.md ]; then
   echo "==> CLAUDE.md created. edit to describe this project."
 fi
 
+# roadmap skeleton
+mkdir -p memory/live-notes
+if [ ! -f memory/live-notes/roadmap.md ]; then
+  PROJECT_NAME="$(basename "$PROJECT_DIR")"
+  TODAY="$(date +%Y-%m-%d)"
+  cat > memory/live-notes/roadmap.md <<EOF
+# Roadmap — $PROJECT_NAME
+
+Started: $TODAY
+
+## Goal
+<one-line success criterion>
+
+## Milestones
+- [ ] M1 — <deliverable>
+- [ ] M2 — <deliverable>
+- [ ] M3 — <deliverable>
+
+## Open questions
+- ?
+
+## Related
+- [[$TODAY-kickoff]]
+EOF
+  echo "==> memory/live-notes/roadmap.md created"
+fi
+
+# kickoff decision skeleton
+TODAY="$(date +%Y-%m-%d)"
+KICKOFF="memory/decisions/$TODAY-kickoff.md"
+if [ ! -f "$KICKOFF" ]; then
+  PROJECT_NAME="$(basename "$PROJECT_DIR")"
+  cat > "$KICKOFF" <<EOF
+# Kickoff — $PROJECT_NAME
+
+Chose **<approach>** over **<alternative>** because **<reason>**.
+
+## Context
+<what problem this solves>
+
+## Constraints
+- <budget / time / stack>
+
+## Related
+- [[roadmap]]
+EOF
+  echo "==> $KICKOFF created — fill in before first real session"
+fi
+
+# Obsidian vault marker (opens this folder as vault without re-prompting)
+mkdir -p .obsidian
+[ -f .obsidian/app.json ] || echo '{"attachmentFolderPath":"memory/inbox"}' > .obsidian/app.json
+
 # .gitignore guards
 touch .gitignore
-for pat in "memory/inbox/" ".memkraft/" ".rtk/tee/"; do
+for pat in "memory/inbox/" ".memkraft/" ".rtk/tee/" ".obsidian/workspace*" ".obsidian/cache"; do
   grep -qxF "$pat" .gitignore || echo "$pat" >> .gitignore
 done
 
-echo "==> project ready. commit:"
-echo "     rtk git add CLAUDE.md memory/ .rtk/ plans/"
-echo "     rtk git commit -m \"add claude-token-optimizer scaffold\""
+# memkraft index so search picks up new files
+PYTHONUTF8=1 PYTHONIOENCODING=utf-8 memkraft index 2>/dev/null || true
+
+echo ""
+echo "==> project ready."
+echo "   Next:"
+echo "   1. Edit memory/decisions/$TODAY-kickoff.md  (one-line why)"
+echo "   2. Edit memory/live-notes/roadmap.md         (milestones)"
+echo "   3. Open this folder in Obsidian as vault (optional, for graph view)"
+echo "   4. rtk git add CLAUDE.md memory/ .rtk/ plans/ .obsidian/app.json .gitignore"
+echo "      rtk git commit -m \"add claude-token-optimizer scaffold\""
